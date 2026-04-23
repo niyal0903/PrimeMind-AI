@@ -110,125 +110,312 @@
 #     root.mainloop()
 
 
-
 import webview
 import psutil
 import threading
 import time
 
-html_content = """
+# Global window reference
+_window = None
+
+HTML = """
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
-body { background: radial-gradient(circle,#001219 0%,#000000 100%);
-color:#00f2ff;font-family:Segoe UI;
-display:flex;justify-content:center;align-items:center;
-height:100vh;margin:0;overflow:hidden;}
+  :root {
+    --cyan: #00f2ff;
+    --red: #ff2a2a;
+    --gold: #ffd700;
+    --blue: #0066ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: radial-gradient(ellipse at center, #001830 0%, #000510 60%, #000 100%);
+    color: var(--cyan);
+    font-family: 'Rajdhani', sans-serif;
+    width:100vw; height:100vh;
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+  }
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,242,255,0.015) 2px, rgba(0,242,255,0.015) 4px);
+    pointer-events:none; z-index:999;
+  }
+  .corner { position:fixed; width:40px; height:40px; }
+  .corner::before,.corner::after { content:''; position:absolute; background:var(--cyan); }
+  .corner::before { width:100%; height:2px; top:0; }
+  .corner::after  { width:2px; height:100%; top:0; }
+  .corner.tl { top:16px; left:16px; }
+  .corner.tr { top:16px; right:16px; transform:scaleX(-1); }
+  .corner.bl { bottom:16px; left:16px; transform:scaleY(-1); }
+  .corner.br { bottom:16px; right:16px; transform:scale(-1); }
 
-.main-container{position:relative;width:500px;height:500px;
-display:flex;justify-content:center;align-items:center;}
+  .topbar {
+    position:fixed; top:0; left:0; right:0; height:36px;
+    background:linear-gradient(90deg,transparent,rgba(0,242,255,0.08),transparent);
+    border-bottom:1px solid rgba(0,242,255,0.2);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 60px;
+    font-family:'Orbitron',monospace; font-size:0.55rem; letter-spacing:3px;
+    color:rgba(0,242,255,0.5);
+  }
+  .topbar-center { color:var(--cyan); font-size:0.6rem; letter-spacing:5px; }
 
-.ring{position:absolute;border-radius:50%;
-border:2px solid transparent;
-animation:rotate linear infinite;}
+  .bottombar {
+    position:fixed; bottom:0; left:0; right:0; height:32px;
+    border-top:1px solid rgba(0,242,255,0.15);
+    display:flex; align-items:center; justify-content:center; gap:40px;
+    font-family:'Orbitron',monospace; font-size:0.5rem; letter-spacing:3px;
+    color:rgba(0,242,255,0.35);
+  }
 
-.outer{width:400px;height:400px;
-border-top:3px solid #00f2ff;
-border-bottom:3px solid #00f2ff;
-animation-duration:4s;
-box-shadow:0 0 20px #00f2ff;}
+  .stage {
+    position:relative; width:520px; height:520px;
+    display:flex; align-items:center; justify-content:center;
+    animation: stageIn 1.2s ease forwards;
+  }
+  @keyframes stageIn { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
 
-.middle{width:300px;height:300px;
-border-left:3px solid #ff4d4d;
-border-right:3px solid #ff4d4d;
-animation-duration:3s;
-animation-direction:reverse;
-box-shadow:0 0 15px #ff4d4d;}
+  .ring { position:absolute; border-radius:50%; animation:spin linear infinite; }
+  .r1 { width:500px;height:500px; border:1px dashed rgba(0,242,255,0.12); animation-duration:60s; }
+  .r2 { width:460px;height:460px; border-top:2px solid rgba(0,242,255,0.7); border-bottom:2px solid rgba(0,242,255,0.7); border-left:2px solid transparent; border-right:2px solid transparent; animation-duration:8s; filter:drop-shadow(0 0 6px var(--cyan)); }
+  .r3 { width:400px;height:400px; border:1px solid rgba(0,242,255,0.1); border-top:1px solid rgba(0,242,255,0.4); animation-duration:12s; animation-direction:reverse; }
+  .r4 { width:350px;height:350px; border-left:2px solid rgba(255,42,42,0.7); border-right:2px solid rgba(255,42,42,0.7); border-top:2px solid transparent; border-bottom:2px solid transparent; animation-duration:5s; filter:drop-shadow(0 0 8px var(--red)); }
+  .r5 { width:300px;height:300px; border:1px dashed rgba(0,242,255,0.2); animation-duration:20s; }
+  .r6 { width:250px;height:250px; border-top:2px solid rgba(255,215,0,0.8); border-right:2px solid rgba(255,215,0,0.4); border-bottom:2px solid transparent; border-left:2px solid transparent; animation-duration:3s; animation-direction:reverse; filter:drop-shadow(0 0 6px var(--gold)); }
+  .r7 { width:200px;height:200px; border:1px solid rgba(0,102,255,0.3); border-right:1px solid rgba(0,102,255,0.8); animation-duration:2s; filter:drop-shadow(0 0 4px var(--blue)); }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 
-.inner{width:200px;height:200px;
-border-top:3px solid #ffeb3b;
-animation-duration:2s;
-box-shadow:0 0 10px #ffeb3b;}
+  .side-panel { position:absolute; top:50%; transform:translateY(-50%); width:130px; display:flex; flex-direction:column; gap:8px; }
+  .side-panel.left  { right:calc(100% + 20px); align-items:flex-end; }
+  .side-panel.right { left:calc(100% + 20px);  align-items:flex-start; }
 
-.content{text-align:center;z-index:10;}
+  .stat-block { background:rgba(0,30,60,0.6); border:1px solid rgba(0,242,255,0.2); padding:8px 12px; position:relative; overflow:hidden; }
+  .stat-block::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+  .stat-block.r::before { background:var(--red);  box-shadow:0 0 6px var(--red); }
+  .stat-block.g::before { background:var(--gold); box-shadow:0 0 6px var(--gold); }
+  .stat-block.b::before { background:var(--blue); box-shadow:0 0 6px var(--blue); }
 
-h1{font-size:2.5rem;letter-spacing:5px;
-margin:0;text-shadow:0 0 15px #00f2ff;}
+  .stat-label { font-family:'Orbitron',monospace; font-size:0.42rem; letter-spacing:3px; color:rgba(0,242,255,0.45); margin-bottom:4px; }
+  .stat-val   { font-family:'Orbitron',monospace; font-size:1.05rem; font-weight:700; color:var(--cyan); text-shadow:0 0 8px var(--cyan); }
+  .stat-val.r { color:var(--red);  text-shadow:0 0 8px var(--red); }
+  .stat-val.g { color:var(--gold); text-shadow:0 0 8px var(--gold); }
+  .stat-val.b { color:var(--blue); text-shadow:0 0 8px var(--blue); }
 
-.stats{font-size:1rem;margin-top:10px;
-color:#ffffff;line-height:1.6;font-weight:bold;}
+  .bar { width:100%; height:3px; background:rgba(0,242,255,0.1); margin-top:5px; }
+  .bar-fill { height:100%; background:var(--cyan); box-shadow:0 0 4px var(--cyan); transition:width 0.8s ease; }
+  .bar-fill.r { background:var(--red);  box-shadow:0 0 4px var(--red); }
+  .bar-fill.g { background:var(--gold); box-shadow:0 0 4px var(--gold); }
+  .bar-fill.b { background:var(--blue); box-shadow:0 0 4px var(--blue); }
 
-@keyframes rotate{
-from{transform:rotate(0deg);}
-to{transform:rotate(360deg);}
-}
+  .core { position:relative; width:160px; height:160px; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; }
+  .core-glow { position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle,rgba(0,102,255,0.3) 0%,rgba(0,242,255,0.1) 40%,transparent 70%); animation:breath 3s ease-in-out infinite; }
+  @keyframes breath { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.1)} }
+
+  .title { font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:900; letter-spacing:8px; color:var(--cyan); text-shadow:0 0 20px var(--cyan); position:relative; z-index:1; }
+  .subtitle { font-size:0.5rem; letter-spacing:3px; color:rgba(0,242,255,0.45); margin-top:4px; z-index:1; }
+
+  #status-line { font-family:'Orbitron',monospace; font-size:0.55rem; letter-spacing:2px; color:var(--gold); text-shadow:0 0 8px var(--gold); margin-top:8px; z-index:1; text-align:center; min-height:16px; }
+
+  #listen-pulse { display:none; position:fixed; top:50px; right:60px; align-items:center; gap:8px; font-family:'Orbitron',monospace; font-size:0.5rem; letter-spacing:3px; color:var(--red); }
+  .pdot { width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); animation:blink 0.8s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  .cmd-log { position:fixed; bottom:40px; left:60px; width:220px; }
+  .log-title { font-family:'Orbitron',monospace; font-size:0.42rem; letter-spacing:3px; color:rgba(0,242,255,0.35); margin-bottom:6px; border-bottom:1px solid rgba(0,242,255,0.12); padding-bottom:4px; }
+  .log-entry { font-size:0.68rem; color:rgba(0,242,255,0.4); padding:2px 0; }
+  .log-entry.active { color:var(--cyan); }
+
+  .time-display { position:fixed; bottom:40px; right:60px; text-align:right; }
+  #clock { font-family:'Orbitron',monospace; font-size:1.5rem; font-weight:700; color:var(--cyan); text-shadow:0 0 12px var(--cyan); letter-spacing:3px; }
+  #datestr { font-size:0.6rem; letter-spacing:3px; color:rgba(0,242,255,0.4); margin-top:2px; }
 </style>
 </head>
-
 <body>
 
-<div class="main-container">
-<div class="ring outer"></div>
-<div class="ring middle"></div>
-<div class="ring inner"></div>
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
 
-<div class="content">
-<h1>J.A.R.V.I.S</h1>
-<div id="stats-display" class="stats">
-SYSTEM INITIALIZING...
+<div class="topbar">
+  <span>STARK INDUSTRIES</span>
+  <span class="topbar-center">◈ JARVIS INTERFACE v1.0 ◈</span>
+  <span id="sys-status">SYSTEM NOMINAL</span>
 </div>
+<div class="bottombar">
+  <span>ENCRYPTION: AES-256</span>
+  <span id="uptime">UPTIME: 00:00:00</span>
+  <span>NETWORK: SECURE</span>
 </div>
 
+<div id="listen-pulse"><div class="pdot"></div><span>LISTENING</span></div>
+
+<div class="time-display">
+  <div id="clock">--:--:--</div>
+  <div id="datestr">--</div>
+</div>
+
+<div class="stage">
+  <div class="ring r1"></div>
+  <div class="ring r2"></div>
+  <div class="ring r3"></div>
+  <div class="ring r4"></div>
+  <div class="ring r5"></div>
+  <div class="ring r6"></div>
+  <div class="ring r7"></div>
+
+  <div class="side-panel left">
+    <div class="stat-block">
+      <div class="stat-label">// CPU</div>
+      <div class="stat-val" id="cpu-v">--%</div>
+      <div class="bar"><div class="bar-fill" id="cpu-b" style="width:0%"></div></div>
+    </div>
+    <div class="stat-block r">
+      <div class="stat-label">// RAM</div>
+      <div class="stat-val r" id="ram-v">--%</div>
+      <div class="bar"><div class="bar-fill r" id="ram-b" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="side-panel right">
+    <div class="stat-block g">
+      <div class="stat-label">// DISK</div>
+      <div class="stat-val g" id="disk-v">--%</div>
+      <div class="bar"><div class="bar-fill g" id="disk-b" style="width:0%"></div></div>
+    </div>
+    <div class="stat-block b">
+      <div class="stat-label">// BATTERY</div>
+      <div class="stat-val b" id="bat-v">--%</div>
+      <div class="bar"><div class="bar-fill b" id="bat-b" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="core">
+    <div class="core-glow"></div>
+    <div class="title">JARVIS</div>
+    <div class="subtitle">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+    <div id="status-line">INITIALIZING...</div>
+  </div>
+</div>
+
+<div class="cmd-log">
+  <div class="log-title">// COMMAND LOG</div>
+  <div id="log-list"></div>
 </div>
 
 <script>
-function updateStats(cpu,ram,disk,battery){
-document.getElementById("stats-display").innerHTML=
-`CPU: ${cpu}% | RAM: ${ram}%<br>DISK: ${disk}% | BAT: ${battery}%`
-}
-</script>
+  var logEntries = [];
+  var startTime = Date.now();
 
+  function updateStats(cpu, ram, disk, bat) {
+    document.getElementById('cpu-v').textContent  = cpu  + '%';
+    document.getElementById('ram-v').textContent  = ram  + '%';
+    document.getElementById('disk-v').textContent = disk + '%';
+    document.getElementById('bat-v').textContent  = bat  + '%';
+    document.getElementById('cpu-b').style.width  = cpu  + '%';
+    document.getElementById('ram-b').style.width  = ram  + '%';
+    document.getElementById('disk-b').style.width = disk + '%';
+    document.getElementById('bat-b').style.width  = (isNaN(bat) ? 0 : bat) + '%';
+  }
+
+  function setStatus(text) {
+    document.getElementById('status-line').textContent = text;
+  }
+
+  function setListening(active) {
+    document.getElementById('listen-pulse').style.display = active ? 'flex' : 'none';
+  }
+
+  function addLog(entry) {
+    logEntries.push(entry);
+    if (logEntries.length > 5) logEntries.shift();
+    var html = '';
+    for (var i = 0; i < logEntries.length; i++) {
+      var cls = (i === logEntries.length - 1) ? 'active' : '';
+      html += '<div class="log-entry ' + cls + '">> ' + logEntries[i] + '</div>';
+    }
+    document.getElementById('log-list').innerHTML = html;
+  }
+
+  function tick() {
+    var now = new Date();
+    document.getElementById('clock').textContent = now.toTimeString().slice(0,8);
+    document.getElementById('datestr').textContent = now.toDateString().toUpperCase();
+    var e = Math.floor((Date.now()-startTime)/1000);
+    var h=String(Math.floor(e/3600)).padStart(2,'0');
+    var m=String(Math.floor((e%3600)/60)).padStart(2,'0');
+    var s=String(e%60).padStart(2,'0');
+    document.getElementById('uptime').textContent = 'UPTIME: '+h+':'+m+':'+s;
+  }
+  setInterval(tick, 1000); tick();
+
+  var bootMsgs = ['LOADING MODULES...','VOICE ENGINE ONLINE','SCANNING HARDWARE...','ALL SYSTEMS GO','SAY: JARVIS'];
+  var bi = 0;
+  function boot() {
+    if (bi < bootMsgs.length) {
+      setStatus(bootMsgs[bi]); addLog(bootMsgs[bi]); bi++;
+      setTimeout(boot, 700);
+    }
+  }
+  setTimeout(boot, 500);
+</script>
 </body>
 </html>
 """
 
-
-def update_logic(window):
-
+def _stats_loop(win):
     while True:
-
-        cpu = psutil.cpu_percent()
-        ram = psutil.virtual_memory().percent
-        disk = psutil.disk_usage("C:\\").percent
-
-        bat = psutil.sensors_battery()
-        battery = bat.percent if bat else "N/A"
-
         try:
-            window.evaluate_js(
-                f"updateStats({cpu},{ram},{disk},'{battery}')"
-            )
+            cpu  = psutil.cpu_percent(interval=None)
+            ram  = psutil.virtual_memory().percent
+            disk = psutil.disk_usage("C:\\").percent
+            bat  = psutil.sensors_battery()
+            b    = int(bat.percent) if bat else 0
+            win.evaluate_js(f"updateStats({cpu},{ram},{disk},{b})")
         except:
             pass
-
         time.sleep(1)
 
 
-def iron_gui(root):
+def set_status(win, text):
+    try:
+        safe = text.replace("'","").replace('"','')[:50]
+        win.evaluate_js(f"setStatus('{safe}')")
+    except:
+        pass
 
-    window = webview.create_window(
-        "JARVIS SYSTEM",
-        html=html_content,
-        width=600,
-        height=600,
-        resizable=False
+
+def set_listening(win, active):
+    try:
+        win.evaluate_js(f"setListening({'true' if active else 'false'})")
+    except:
+        pass
+
+
+def add_log(win, text):
+    try:
+        safe = text.replace("'","").replace('"','')[:40]
+        win.evaluate_js(f"addLog('{safe}')")
+    except:
+        pass
+
+
+def iron_gui():
+    """Call this ONCE from main thread — it blocks until window is closed."""
+    global _window
+    _window = webview.create_window(
+        "JARVIS — Stark Industries",
+        html=HTML,
+        width=900,
+        height=700,
+        resizable=True,
     )
-
-    threading.Thread(
-        target=update_logic,
-        args=(window,),
-        daemon=True
-    ).start()
-
-    webview.start(gui="edgechromium")
+    threading.Thread(target=_stats_loop, args=(_window,), daemon=True).start()
+    webview.start(gui="edgechromium")   # blocks here — returns only when window closed
