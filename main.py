@@ -192,8 +192,11 @@ def jarvis_loop():
     speaker = win32com.client.Dispatch("SAPI.SpVoice")
     speaker.Rate = 1
 
+    # ONE recognizer, ONE microphone — created once
     recognizer = sr.Recognizer()
     recognizer.pause_threshold = 0.8
+    recognizer.energy_threshold = 300
+    recognizer.dynamic_energy_threshold = True
 
     def speak(text):
         print(f"Jarvis : {text}")
@@ -202,54 +205,72 @@ def jarvis_loop():
         speaker.Speak(text)
 
     def listen():
-        """Always listening — shows clean output"""
-        with sr.Microphone() as source:
-            recognizer.adjust_for_ambient_noise(source, duration=0.3)
-            print("Listening...")
-            gui_listening(True)
-            gui_status("LISTENING...")
-            try:
-                audio = recognizer.listen(source, timeout=6, phrase_time_limit=7)
-            except sr.WaitTimeoutError:
-                gui_listening(False)
+        """
+        Properly blocking listen.
+        - Opens mic ONCE per call
+        - NO timeout on listen() — waits until someone speaks
+        - Returns text or ""
+        """
+        try:
+            with sr.Microphone() as source:
+                # Adjust for noise
+                recognizer.adjust_for_ambient_noise(source, duration=0.2)
+
+                print("Listening...")
+                gui_listening(True)
                 gui_status("LISTENING...")
-                return ""
+
+                # ── KEY FIX: No timeout = truly blocking ──
+                # It will wait here SILENTLY until you speak
+                audio = recognizer.listen(source)   # NO timeout argument
+
             gui_listening(False)
 
-        try:
             print("Recognizing...")
             gui_status("RECOGNIZING...")
-            cmd = recognizer.recognize_google(audio, language="en-IN")
-            print(f"You said : {cmd}")
-            gui_log(cmd[:35])
-            return cmd.lower().strip()
+
+            text = recognizer.recognize_google(audio, language="en-IN")
+            print(f"You said : {text}")
+            gui_log(text[:35])
+            return text.lower().strip()
+
         except sr.UnknownValueError:
+            gui_listening(False)
             return ""
+
         except sr.RequestError:
+            gui_listening(False)
             speak("Internet connection error sir.")
             return ""
 
-    # Wait for GUI to load
+        except OSError:
+            gui_listening(False)
+            time.sleep(1)
+            return ""
+
+        except Exception as e:
+            gui_listening(False)
+            print(f"Error: {e}")
+            time.sleep(1)
+            return ""
+
+    # Wait for GUI to fully load
     time.sleep(3)
     speak("Jarvis is online tell me sir.")
 
-    # ══════════════════════════════════════
-    #  MAIN LOOP — always listening
-    # ══════════════════════════════════════
     while True:
-
         cmd = listen()
 
         if not cmd:
             continue
 
-        # ── COMMANDS ──────────────────────
-
-        if any(word in cmd for word in ["jarvis","jar wis", "service", "travis", "jervis"]):
-            print("wake word dtected")
-            speak("Yes sir")
+        # Wake word
+        if any(w in cmd for w in ["jarvis", "jar wis", "service", "travis", "jervis"]):
+            speak("Yes sir.")
             continue
-        if "send message" in cmd:
+
+        # Send message
+        elif "send message" in cmd:
             speak("Who should I message sir?")
             name = listen()
             if name and name in contacts:
@@ -263,14 +284,16 @@ def jarvis_loop():
             else:
                 speak("Contact not found sir.")
 
+        # System info
         elif "system" in cmd and any(w in cmd for w in ["status", "report", "info"]):
             cpu  = psutil.cpu_percent(interval=1)
             ram  = psutil.virtual_memory().percent
             disk = psutil.disk_usage("C:\\").percent
             bat  = psutil.sensors_battery()
             b    = f"{int(bat.percent)} percent" if bat else "unavailable"
-            speak(f"CPU {cpu}%. RAM {ram}%. Disk {disk}%. Battery {b}.")
+            speak(f"CPU {cpu} percent. RAM {ram} percent. Disk {disk} percent. Battery {b}.")
 
+        # Date and time
         elif "date and time" in cmd:
             n = datetime.datetime.now()
             speak(f"Sir today is {n.strftime('%d %B %Y')} and time is {n.strftime('%I:%M %p')}.")
@@ -281,16 +304,18 @@ def jarvis_loop():
         elif any(w in cmd for w in ["what date", "todays date", "date", "today"]):
             speak(f"Sir today is {datetime.datetime.now().strftime('%d %B %Y')}.")
 
+        # Air drawing
         elif "air drawing" in cmd or "start drawing" in cmd:
             speak("Starting air drawing sir.")
             gui_status("AIR DRAWING ACTIVE")
             try:
                 from airdrawing import start_drawing
                 start_drawing()
-            except Exception as e:
+            except:
                 speak("Air drawing module not found sir.")
             gui_status("LISTENING...")
 
+        # Browsers
         elif "open google" in cmd:
             speak("Opening Google sir.")
             webbrowser.open("https://google.com")
@@ -325,6 +350,7 @@ def jarvis_loop():
             speak(f"Searching {q} sir.")
             webbrowser.open(f"https://www.google.com/search?q={q}")
 
+        # Windows apps
         elif "open file explorer" in cmd or "open explorer" in cmd:
             speak("Opening File Explorer sir.")
             os.system("explorer")
@@ -353,6 +379,7 @@ def jarvis_loop():
             speak("Opening Paint sir.")
             os.system("mspaint")
 
+        # MS Office
         elif "open word" in cmd:
             speak("Opening Word sir.")
             os.system("start winword")
@@ -365,6 +392,7 @@ def jarvis_loop():
             speak("Opening Excel sir.")
             os.system("start excel")
 
+        # Spotify
         elif "open spotify" in cmd:
             speak("Opening Spotify sir.")
             os.system("start spotify:")
@@ -374,6 +402,7 @@ def jarvis_loop():
             speak(f"Playing {song} sir.")
             webbrowser.open(f"https://open.spotify.com/search/{song}")
 
+        # Screenshot
         elif "screenshot" in cmd:
             try:
                 import pyautogui
@@ -383,6 +412,7 @@ def jarvis_loop():
             except:
                 speak("Please install pyautogui sir.")
 
+        # Power
         elif "shutdown" in cmd:
             speak("Shutting down in 10 seconds. Say cancel to abort.")
             c = listen()
@@ -400,6 +430,7 @@ def jarvis_loop():
             speak("Going to sleep sir.")
             os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
 
+        # Exit
         elif any(w in cmd for w in ["exit", "stop", "quit", "bye", "goodbye"]):
             speak("Goodbye sir.")
             gui_status("OFFLINE")
@@ -410,9 +441,6 @@ def jarvis_loop():
             speak("Sorry sir I did not understand.")
 
 
-# ─────────────────────────────────────────
-#  ENTRY POINT
-# ─────────────────────────────────────────
 if __name__ == "__main__":
     t = threading.Thread(target=jarvis_loop, daemon=True)
     t.start()
@@ -420,10 +448,9 @@ if __name__ == "__main__":
     if GUI_AVAILABLE:
         GUI.iron_gui()
     else:
-        print("[JARVIS] No GUI. Ctrl+C to stop.")
+        print("Jarvis running. Ctrl+C to stop.")
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("[JARVIS] Offline.")
-            #updtae
+            print("Jarvis offline.")
