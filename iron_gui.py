@@ -115,7 +115,6 @@ import psutil
 import threading
 import time
 
-# Global window reference
 _window = None
 
 HTML = """
@@ -123,262 +122,819 @@ HTML = """
 <html>
 <head>
 <meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --cyan: #00f2ff;
-    --red: #ff2a2a;
-    --gold: #ffd700;
-    --blue: #0066ff;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background: radial-gradient(ellipse at center, #001830 0%, #000510 60%, #000 100%);
-    color: var(--cyan);
-    font-family: 'Rajdhani', sans-serif;
-    width:100vw; height:100vh;
-    overflow:hidden;
-    display:flex; flex-direction:column;
-    align-items:center; justify-content:center;
-  }
-  body::before {
-    content:'';
-    position:fixed; inset:0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,242,255,0.015) 2px, rgba(0,242,255,0.015) 4px);
-    pointer-events:none; z-index:999;
-  }
-  .corner { position:fixed; width:40px; height:40px; }
-  .corner::before,.corner::after { content:''; position:absolute; background:var(--cyan); }
-  .corner::before { width:100%; height:2px; top:0; }
-  .corner::after  { width:2px; height:100%; top:0; }
-  .corner.tl { top:16px; left:16px; }
-  .corner.tr { top:16px; right:16px; transform:scaleX(-1); }
-  .corner.bl { bottom:16px; left:16px; transform:scaleY(-1); }
-  .corner.br { bottom:16px; right:16px; transform:scale(-1); }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-  .topbar {
-    position:fixed; top:0; left:0; right:0; height:36px;
-    background:linear-gradient(90deg,transparent,rgba(0,242,255,0.08),transparent);
-    border-bottom:1px solid rgba(0,242,255,0.2);
-    display:flex; align-items:center; justify-content:space-between;
-    padding:0 60px;
-    font-family:'Orbitron',monospace; font-size:0.55rem; letter-spacing:3px;
-    color:rgba(0,242,255,0.5);
-  }
-  .topbar-center { color:var(--cyan); font-size:0.6rem; letter-spacing:5px; }
+body {
+  background: #000;
+  font-family: 'Orbitron', monospace;
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+  color: #00f2ff;
+}
 
-  .bottombar {
-    position:fixed; bottom:0; left:0; right:0; height:32px;
-    border-top:1px solid rgba(0,242,255,0.15);
-    display:flex; align-items:center; justify-content:center; gap:40px;
-    font-family:'Orbitron',monospace; font-size:0.5rem; letter-spacing:3px;
-    color:rgba(0,242,255,0.35);
-  }
+/* ── SCANLINES ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,0.15) 3px, rgba(0,0,0,0.15) 4px
+  );
+  pointer-events: none; z-index: 9999;
+}
 
-  .stage {
-    position:relative; width:520px; height:520px;
-    display:flex; align-items:center; justify-content:center;
-    animation: stageIn 1.2s ease forwards;
-  }
-  @keyframes stageIn { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+/* ── BACKGROUND GRID ── */
+.bg-grid {
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,242,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,242,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: gridMove 20s linear infinite;
+}
+@keyframes gridMove {
+  from { background-position: 0 0; }
+  to   { background-position: 40px 40px; }
+}
 
-  .ring { position:absolute; border-radius:50%; animation:spin linear infinite; }
-  .r1 { width:500px;height:500px; border:1px dashed rgba(0,242,255,0.12); animation-duration:60s; }
-  .r2 { width:460px;height:460px; border-top:2px solid rgba(0,242,255,0.7); border-bottom:2px solid rgba(0,242,255,0.7); border-left:2px solid transparent; border-right:2px solid transparent; animation-duration:8s; filter:drop-shadow(0 0 6px var(--cyan)); }
-  .r3 { width:400px;height:400px; border:1px solid rgba(0,242,255,0.1); border-top:1px solid rgba(0,242,255,0.4); animation-duration:12s; animation-direction:reverse; }
-  .r4 { width:350px;height:350px; border-left:2px solid rgba(255,42,42,0.7); border-right:2px solid rgba(255,42,42,0.7); border-top:2px solid transparent; border-bottom:2px solid transparent; animation-duration:5s; filter:drop-shadow(0 0 8px var(--red)); }
-  .r5 { width:300px;height:300px; border:1px dashed rgba(0,242,255,0.2); animation-duration:20s; }
-  .r6 { width:250px;height:250px; border-top:2px solid rgba(255,215,0,0.8); border-right:2px solid rgba(255,215,0,0.4); border-bottom:2px solid transparent; border-left:2px solid transparent; animation-duration:3s; animation-direction:reverse; filter:drop-shadow(0 0 6px var(--gold)); }
-  .r7 { width:200px;height:200px; border:1px solid rgba(0,102,255,0.3); border-right:1px solid rgba(0,102,255,0.8); animation-duration:2s; filter:drop-shadow(0 0 4px var(--blue)); }
-  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+/* ── VIGNETTE ── */
+.vignette {
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center,
+    transparent 40%, rgba(0,0,0,0.85) 100%);
+  pointer-events: none; z-index: 1;
+}
 
-  .side-panel { position:absolute; top:50%; transform:translateY(-50%); width:130px; display:flex; flex-direction:column; gap:8px; }
-  .side-panel.left  { right:calc(100% + 20px); align-items:flex-end; }
-  .side-panel.right { left:calc(100% + 20px);  align-items:flex-start; }
+/* ── MAIN LAYOUT ── */
+.layout {
+  position: relative;
+  width: 100vw; height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10;
+}
 
-  .stat-block { background:rgba(0,30,60,0.6); border:1px solid rgba(0,242,255,0.2); padding:8px 12px; position:relative; overflow:hidden; }
-  .stat-block::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
-  .stat-block.r::before { background:var(--red);  box-shadow:0 0 6px var(--red); }
-  .stat-block.g::before { background:var(--gold); box-shadow:0 0 6px var(--gold); }
-  .stat-block.b::before { background:var(--blue); box-shadow:0 0 6px var(--blue); }
+/* ════════════════════════════════
+   CENTER — ARC REACTOR
+════════════════════════════════ */
+.arc-wrap {
+  position: relative;
+  width: 440px; height: 440px;
+  display: flex; align-items: center; justify-content: center;
+}
 
-  .stat-label { font-family:'Orbitron',monospace; font-size:0.42rem; letter-spacing:3px; color:rgba(0,242,255,0.45); margin-bottom:4px; }
-  .stat-val   { font-family:'Orbitron',monospace; font-size:1.05rem; font-weight:700; color:var(--cyan); text-shadow:0 0 8px var(--cyan); }
-  .stat-val.r { color:var(--red);  text-shadow:0 0 8px var(--red); }
-  .stat-val.g { color:var(--gold); text-shadow:0 0 8px var(--gold); }
-  .stat-val.b { color:var(--blue); text-shadow:0 0 8px var(--blue); }
+/* Hex grid background behind arc */
+.arc-wrap::before {
+  content: '';
+  position: absolute;
+  width: 300px; height: 300px;
+  background:
+    radial-gradient(circle, rgba(0,102,255,0.12) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: corePulse 3s ease-in-out infinite;
+}
+@keyframes corePulse {
+  0%,100% { transform: scale(1); opacity: 0.6; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
 
-  .bar { width:100%; height:3px; background:rgba(0,242,255,0.1); margin-top:5px; }
-  .bar-fill { height:100%; background:var(--cyan); box-shadow:0 0 4px var(--cyan); transition:width 0.8s ease; }
-  .bar-fill.r { background:var(--red);  box-shadow:0 0 4px var(--red); }
-  .bar-fill.g { background:var(--gold); box-shadow:0 0 4px var(--gold); }
-  .bar-fill.b { background:var(--blue); box-shadow:0 0 4px var(--blue); }
+/* Rings */
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  animation: spin linear infinite;
+}
 
-  .core { position:relative; width:160px; height:160px; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; }
-  .core-glow { position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle,rgba(0,102,255,0.3) 0%,rgba(0,242,255,0.1) 40%,transparent 70%); animation:breath 3s ease-in-out infinite; }
-  @keyframes breath { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.1)} }
+.ring-1 {
+  width: 420px; height: 420px;
+  border: 1px solid rgba(0,242,255,0.08);
+  animation-duration: 80s;
+}
+.ring-2 {
+  width: 390px; height: 390px;
+  border-top: 1px solid rgba(0,242,255,0.25);
+  border-bottom: 1px solid rgba(0,242,255,0.25);
+  border-left: 1px solid transparent;
+  border-right: 1px solid transparent;
+  animation-duration: 30s;
+  animation-direction: reverse;
+}
+.ring-3 {
+  width: 360px; height: 360px;
+  border: 1px dashed rgba(0,242,255,0.1);
+  animation-duration: 25s;
+}
+.ring-4 {
+  width: 320px; height: 320px;
+  border-top: 2px solid #00f2ff;
+  border-right: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-left: 2px solid #00f2ff;
+  animation-duration: 10s;
+  filter: drop-shadow(0 0 6px #00f2ff);
+}
+.ring-5 {
+  width: 280px; height: 280px;
+  border: 1px solid rgba(255,42,42,0.15);
+  border-right: 1px solid rgba(255,42,42,0.5);
+  animation-duration: 7s;
+  animation-direction: reverse;
+  filter: drop-shadow(0 0 4px rgba(255,42,42,0.3));
+}
+.ring-6 {
+  width: 240px; height: 240px;
+  border-top: 2px solid rgba(255,215,0,0.7);
+  border-bottom: 2px solid rgba(255,215,0,0.3);
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  animation-duration: 5s;
+  filter: drop-shadow(0 0 5px rgba(255,215,0,0.4));
+}
+.ring-7 {
+  width: 200px; height: 200px;
+  border: 1px solid rgba(0,242,255,0.2);
+  border-bottom: 2px solid #00f2ff;
+  animation-duration: 3s;
+  animation-direction: reverse;
+}
+.ring-8 {
+  width: 170px; height: 170px;
+  border-top: 1px solid rgba(0,102,255,0.6);
+  border-bottom: 1px solid transparent;
+  border-left: 1px solid rgba(0,102,255,0.6);
+  border-right: 1px solid transparent;
+  animation-duration: 2s;
+  filter: drop-shadow(0 0 6px rgba(0,102,255,0.5));
+}
 
-  .title { font-family:'Orbitron',monospace; font-size:1.4rem; font-weight:900; letter-spacing:8px; color:var(--cyan); text-shadow:0 0 20px var(--cyan); position:relative; z-index:1; }
-  .subtitle { font-size:0.5rem; letter-spacing:3px; color:rgba(0,242,255,0.45); margin-top:4px; z-index:1; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
-  #status-line { font-family:'Orbitron',monospace; font-size:0.55rem; letter-spacing:2px; color:var(--gold); text-shadow:0 0 8px var(--gold); margin-top:8px; z-index:1; text-align:center; min-height:16px; }
+/* Tick marks on ring-4 */
+.ticks {
+  position: absolute;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  animation: spin 10s linear infinite;
+}
+.tick {
+  position: absolute;
+  width: 2px; background: rgba(0,242,255,0.6);
+  left: 50%; top: 0;
+  transform-origin: 50% 160px;
+}
 
-  #listen-pulse { display:none; position:fixed; top:50px; right:60px; align-items:center; gap:8px; font-family:'Orbitron',monospace; font-size:0.5rem; letter-spacing:3px; color:var(--red); }
-  .pdot { width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); animation:blink 0.8s ease-in-out infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+/* Dot nodes */
+.dot-node {
+  position: absolute;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #00f2ff;
+  box-shadow: 0 0 8px #00f2ff;
+}
 
-  .cmd-log { position:fixed; bottom:40px; left:60px; width:220px; }
-  .log-title { font-family:'Orbitron',monospace; font-size:0.42rem; letter-spacing:3px; color:rgba(0,242,255,0.35); margin-bottom:6px; border-bottom:1px solid rgba(0,242,255,0.12); padding-bottom:4px; }
-  .log-entry { font-size:0.68rem; color:rgba(0,242,255,0.4); padding:2px 0; }
-  .log-entry.active { color:var(--cyan); }
+/* ── LISTEN RING ── */
+#listen-ring {
+  position: absolute;
+  width: 155px; height: 155px;
+  border-radius: 50%;
+  border: 2px solid #00ff88;
+  box-shadow: 0 0 20px #00ff88, inset 0 0 20px rgba(0,255,136,0.1);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 5;
+}
+#listen-ring.active {
+  opacity: 1;
+  animation: listenPulse 1s ease-in-out infinite;
+}
+@keyframes listenPulse {
+  0%,100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.12); opacity: 0.4; }
+}
 
-  .time-display { position:fixed; bottom:40px; right:60px; text-align:right; }
-  #clock { font-family:'Orbitron',monospace; font-size:1.5rem; font-weight:700; color:var(--cyan); text-shadow:0 0 12px var(--cyan); letter-spacing:3px; }
-  #datestr { font-size:0.6rem; letter-spacing:3px; color:rgba(0,242,255,0.4); margin-top:2px; }
+/* ── CORE CENTER ── */
+.core {
+  position: relative;
+  width: 140px; height: 140px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 20;
+  text-align: center;
+}
+
+/* Arc reactor inner glow */
+.core::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(0,150,255,0.4) 0%,
+    rgba(0,242,255,0.15) 40%,
+    transparent 70%
+  );
+  animation: corePulse 3s ease-in-out infinite;
+}
+
+/* Hexagonal pattern on core */
+.core::after {
+  content: '';
+  position: absolute; inset: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,242,255,0.2);
+  background:
+    repeating-conic-gradient(
+      rgba(0,242,255,0.05) 0deg 60deg,
+      transparent 60deg 120deg
+    );
+}
+
+.core-title {
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #00f2ff;
+  text-shadow: 0 0 20px #00f2ff, 0 0 40px rgba(0,242,255,0.3);
+  position: relative; z-index: 2;
+  animation: titleFlicker 5s ease-in-out infinite;
+}
+@keyframes titleFlicker {
+  0%,94%,100% { opacity: 1; }
+  95% { opacity: 0.5; }
+  96% { opacity: 1; }
+  97% { opacity: 0.7; }
+}
+
+#status-line {
+  font-size: 0.38rem;
+  letter-spacing: 2px;
+  margin-top: 6px;
+  color: #ffd700;
+  text-shadow: 0 0 8px #ffd700;
+  position: relative; z-index: 2;
+  min-height: 14px;
+  transition: color 0.3s, text-shadow 0.3s;
+}
+#status-line.listening   { color: #00ff88; text-shadow: 0 0 8px #00ff88; }
+#status-line.recognizing { color: #00f2ff; text-shadow: 0 0 8px #00f2ff; }
+#status-line.speaking    { color: #ff8800; text-shadow: 0 0 8px #ff8800; }
+
+
+/* ════════════════════════════════
+   LEFT PANEL
+════════════════════════════════ */
+.left-panel {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 200px;
+  display: flex; flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 20px;
+}
+
+/* ════════════════════════════════
+   RIGHT PANEL
+════════════════════════════════ */
+.right-panel {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 200px;
+  display: flex; flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 20px;
+}
+
+/* ── STAT CARD ── */
+.stat-card {
+  background: rgba(0,15,35,0.8);
+  border: 1px solid rgba(0,242,255,0.15);
+  border-left: 2px solid #00f2ff;
+  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+.stat-card.red   { border-left-color: #ff2a2a; }
+.stat-card.gold  { border-left-color: #ffd700; }
+.stat-card.blue  { border-left-color: #0066ff; }
+.stat-card.green { border-left-color: #00ff88; }
+
+/* Animated scan line inside card */
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0,242,255,0.06), transparent);
+  animation: cardScan 3s linear infinite;
+}
+@keyframes cardScan { to { left: 200%; } }
+
+.card-label {
+  font-size: 0.38rem;
+  letter-spacing: 3px;
+  color: rgba(0,242,255,0.4);
+  margin-bottom: 4px;
+}
+.card-val {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #00f2ff;
+  text-shadow: 0 0 10px #00f2ff;
+  line-height: 1;
+}
+.card-val.red   { color: #ff4d4d; text-shadow: 0 0 10px #ff2a2a; }
+.card-val.gold  { color: #ffd700; text-shadow: 0 0 10px #ffd700; }
+.card-val.blue  { color: #4d88ff; text-shadow: 0 0 10px #0066ff; }
+.card-val.green { color: #00ff88; text-shadow: 0 0 10px #00ff88; }
+
+.bar-track {
+  width: 100%; height: 2px;
+  background: rgba(0,242,255,0.08);
+  margin-top: 6px;
+}
+.bar-fill {
+  height: 100%;
+  background: #00f2ff;
+  box-shadow: 0 0 4px #00f2ff;
+  transition: width 1s ease;
+}
+.bar-fill.red   { background: #ff2a2a; box-shadow: 0 0 4px #ff2a2a; }
+.bar-fill.gold  { background: #ffd700; box-shadow: 0 0 4px #ffd700; }
+.bar-fill.blue  { background: #0066ff; box-shadow: 0 0 4px #0066ff; }
+.bar-fill.green { background: #00ff88; box-shadow: 0 0 4px #00ff88; }
+
+/* mini sparkline */
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 20px;
+  margin-top: 5px;
+}
+.spark-bar {
+  flex: 1;
+  background: rgba(0,242,255,0.4);
+  min-height: 2px;
+  transition: height 0.4s ease;
+  border-radius: 1px;
+}
+.spark-bar.red  { background: rgba(255,42,42,0.5); }
+.spark-bar.gold { background: rgba(255,215,0,0.5); }
+.spark-bar.blue { background: rgba(0,102,255,0.5); }
+
+
+/* ════════════════════════════════
+   TOP BAR
+════════════════════════════════ */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 40px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(0,242,255,0.05) 20%,
+    rgba(0,242,255,0.05) 80%,
+    transparent
+  );
+  border-bottom: 1px solid rgba(0,242,255,0.12);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  font-size: 0.45rem;
+  letter-spacing: 3px;
+  color: rgba(0,242,255,0.4);
+  z-index: 100;
+}
+.topbar-mid {
+  color: #00f2ff;
+  font-size: 0.5rem;
+  letter-spacing: 5px;
+  text-shadow: 0 0 10px rgba(0,242,255,0.4);
+}
+
+/* ── CORNER BRACKETS ── */
+.corner { position: fixed; width: 20px; height: 20px; z-index: 100; }
+.corner::before, .corner::after { content: ''; position: absolute; background: #00f2ff; }
+.corner::before { width: 100%; height: 1px; top: 0; }
+.corner::after  { width: 1px; height: 100%; top: 0; }
+.corner.tl { top: 44px; left: 8px; }
+.corner.tr { top: 44px; right: 8px; transform: scaleX(-1); }
+.corner.bl { bottom: 36px; left: 8px; transform: scaleY(-1); }
+.corner.br { bottom: 36px; right: 8px; transform: scale(-1); }
+
+
+/* ════════════════════════════════
+   BOTTOM BAR
+════════════════════════════════ */
+.bottombar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 32px;
+  border-top: 1px solid rgba(0,242,255,0.1);
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  font-size: 0.4rem;
+  letter-spacing: 3px;
+  color: rgba(0,242,255,0.3);
+  z-index: 100;
+}
+
+/* ════════════════════════════════
+   COMMAND LOG (bottom left)
+════════════════════════════════ */
+.cmd-log {
+  position: fixed;
+  bottom: 40px; left: 210px;
+  width: 180px;
+  z-index: 50;
+}
+.log-hdr {
+  font-size: 0.38rem; letter-spacing: 3px;
+  color: rgba(0,242,255,0.3);
+  border-bottom: 1px solid rgba(0,242,255,0.1);
+  padding-bottom: 4px; margin-bottom: 5px;
+}
+.log-entry {
+  font-size: 0.55rem;
+  color: rgba(0,242,255,0.35);
+  padding: 2px 0;
+  white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 1px solid rgba(0,242,255,0.1);
+  padding-left: 6px;
+  margin-bottom: 2px;
+}
+.log-entry.active {
+  color: #00f2ff;
+  border-left-color: #00f2ff;
+  text-shadow: 0 0 6px rgba(0,242,255,0.4);
+}
+
+/* ════════════════════════════════
+   CLOCK (bottom right)
+════════════════════════════════ */
+.clock-wrap {
+  position: fixed;
+  bottom: 40px; right: 210px;
+  text-align: right;
+  z-index: 50;
+}
+#clock {
+  font-size: 2rem; font-weight: 700;
+  color: #00f2ff;
+  text-shadow: 0 0 15px #00f2ff;
+  letter-spacing: 4px;
+}
+#datestr {
+  font-size: 0.45rem; letter-spacing: 3px;
+  color: rgba(0,242,255,0.4);
+  margin-top: 2px;
+}
+#daystr {
+  font-size: 0.5rem; letter-spacing: 4px;
+  color: rgba(255,215,0,0.5);
+  margin-top: 1px;
+}
+
+/* ── LISTENING TOP RIGHT ── */
+#listen-badge {
+  position: fixed; top: 50px; right: 20px;
+  display: none; align-items: center; gap: 6px;
+  font-size: 0.42rem; letter-spacing: 3px;
+  color: #00ff88; z-index: 100;
+}
+#listen-badge.show { display: flex; }
+.badge-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #00ff88; box-shadow: 0 0 8px #00ff88;
+  animation: dotBlink 0.7s ease-in-out infinite;
+}
+@keyframes dotBlink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+
+/* ── ALERT BORDER ── */
+#alert-border {
+  display: none; position: fixed; inset: 0;
+  border: 2px solid #ff2a2a;
+  box-shadow: inset 0 0 40px rgba(255,42,42,0.1);
+  pointer-events: none; z-index: 998;
+  animation: alertBlink 1s ease-in-out infinite;
+}
+@keyframes alertBlink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 </style>
 </head>
 <body>
 
+<div class="bg-grid"></div>
+<div class="vignette"></div>
+
+<!-- Alert border -->
+<div id="alert-border"></div>
+
+<!-- Topbar -->
+<div class="topbar">
+  <span>STARK INDUSTRIES · MARK I</span>
+  <span class="topbar-mid">◈ J.A.R.V.I.S ◈</span>
+  <span id="sys-label">ALL SYSTEMS NOMINAL</span>
+</div>
+
+<!-- Corners -->
 <div class="corner tl"></div>
 <div class="corner tr"></div>
 <div class="corner bl"></div>
 <div class="corner br"></div>
 
-<div class="topbar">
-  <span>STARK INDUSTRIES</span>
-  <span class="topbar-center">◈ JARVIS INTERFACE v1.0 ◈</span>
-  <span id="sys-status">SYSTEM NOMINAL</span>
-</div>
+<!-- Listen badge -->
+<div id="listen-badge"><div class="badge-dot"></div><span>LISTENING</span></div>
+
+<!-- Bottom bar -->
 <div class="bottombar">
-  <span>ENCRYPTION: AES-256</span>
-  <span id="uptime">UPTIME: 00:00:00</span>
-  <span>NETWORK: SECURE</span>
+  <span>ENCRYPTION · AES-256-GCM</span>
+  <span id="uptime-label">UPTIME · 00:00:00</span>
+  <span>NETWORK · SECURE</span>
 </div>
 
-<div id="listen-pulse"><div class="pdot"></div><span>LISTENING</span></div>
-
-<div class="time-display">
+<!-- Clock -->
+<div class="clock-wrap">
   <div id="clock">--:--:--</div>
-  <div id="datestr">--</div>
+  <div id="datestr">-- --- ----</div>
+  <div id="daystr">--------</div>
 </div>
 
-<div class="stage">
-  <div class="ring r1"></div>
-  <div class="ring r2"></div>
-  <div class="ring r3"></div>
-  <div class="ring r4"></div>
-  <div class="ring r5"></div>
-  <div class="ring r6"></div>
-  <div class="ring r7"></div>
-
-  <div class="side-panel left">
-    <div class="stat-block">
-      <div class="stat-label">// CPU</div>
-      <div class="stat-val" id="cpu-v">--%</div>
-      <div class="bar"><div class="bar-fill" id="cpu-b" style="width:0%"></div></div>
-    </div>
-    <div class="stat-block r">
-      <div class="stat-label">// RAM</div>
-      <div class="stat-val r" id="ram-v">--%</div>
-      <div class="bar"><div class="bar-fill r" id="ram-b" style="width:0%"></div></div>
-    </div>
-  </div>
-
-  <div class="side-panel right">
-    <div class="stat-block g">
-      <div class="stat-label">// DISK</div>
-      <div class="stat-val g" id="disk-v">--%</div>
-      <div class="bar"><div class="bar-fill g" id="disk-b" style="width:0%"></div></div>
-    </div>
-    <div class="stat-block b">
-      <div class="stat-label">// BATTERY</div>
-      <div class="stat-val b" id="bat-v">--%</div>
-      <div class="bar"><div class="bar-fill b" id="bat-b" style="width:0%"></div></div>
-    </div>
-  </div>
-
-  <div class="core">
-    <div class="core-glow"></div>
-    <div class="title">JARVIS</div>
-    <div class="subtitle">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
-    <div id="status-line">INITIALIZING...</div>
-  </div>
-</div>
-
+<!-- Command log -->
 <div class="cmd-log">
-  <div class="log-title">// COMMAND LOG</div>
+  <div class="log-hdr">// COMMAND LOG</div>
   <div id="log-list"></div>
 </div>
 
+<!-- MAIN LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="stat-card">
+      <div class="card-label">// CPU USAGE</div>
+      <div class="card-val" id="cpu-v">--%</div>
+      <div class="bar-track"><div class="bar-fill" id="cpu-b" style="width:0%"></div></div>
+      <div class="sparkline" id="cpu-spark">
+        <div class="spark-bar" style="height:40%"></div>
+        <div class="spark-bar" style="height:60%"></div>
+        <div class="spark-bar" style="height:30%"></div>
+        <div class="spark-bar" style="height:80%"></div>
+        <div class="spark-bar" style="height:50%"></div>
+        <div class="spark-bar" style="height:70%"></div>
+        <div class="spark-bar" style="height:45%"></div>
+        <div class="spark-bar" style="height:90%"></div>
+      </div>
+    </div>
+    <div class="stat-card red">
+      <div class="card-label">// RAM USAGE</div>
+      <div class="card-val red" id="ram-v">--%</div>
+      <div class="bar-track"><div class="bar-fill red" id="ram-b" style="width:0%"></div></div>
+      <div class="sparkline" id="ram-spark">
+        <div class="spark-bar red" style="height:50%"></div>
+        <div class="spark-bar red" style="height:70%"></div>
+        <div class="spark-bar red" style="height:65%"></div>
+        <div class="spark-bar red" style="height:80%"></div>
+        <div class="spark-bar red" style="height:55%"></div>
+        <div class="spark-bar red" style="height:75%"></div>
+        <div class="spark-bar red" style="height:60%"></div>
+        <div class="spark-bar red" style="height:85%"></div>
+      </div>
+    </div>
+    <div class="stat-card green">
+      <div class="card-label">// PROCESSES</div>
+      <div class="card-val green" id="proc-v">--</div>
+      <div class="bar-track"><div class="bar-fill green" id="proc-b" style="width:50%"></div></div>
+    </div>
+  </div>
+
+  <!-- ARC REACTOR -->
+  <div class="arc-wrap">
+    <div class="ring ring-1"></div>
+    <div class="ring ring-2"></div>
+    <div class="ring ring-3"></div>
+    <div class="ring ring-4"></div>
+    <div class="ring ring-5"></div>
+    <div class="ring ring-6"></div>
+    <div class="ring ring-7"></div>
+    <div class="ring ring-8"></div>
+
+    <!-- Tick marks -->
+    <div class="ticks" id="ticks"></div>
+
+    <!-- Listen ring -->
+    <div id="listen-ring"></div>
+
+    <!-- CORE -->
+    <div class="core">
+      <div class="core-title">JARVIS</div>
+      <div id="status-line">INITIALIZING</div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="stat-card gold">
+      <div class="card-label">// DISK C:</div>
+      <div class="card-val gold" id="disk-v">--%</div>
+      <div class="bar-track"><div class="bar-fill gold" id="disk-b" style="width:0%"></div></div>
+      <div class="sparkline" id="disk-spark">
+        <div class="spark-bar gold" style="height:70%"></div>
+        <div class="spark-bar gold" style="height:70%"></div>
+        <div class="spark-bar gold" style="height:72%"></div>
+        <div class="spark-bar gold" style="height:71%"></div>
+        <div class="spark-bar gold" style="height:73%"></div>
+        <div class="spark-bar gold" style="height:70%"></div>
+        <div class="spark-bar gold" style="height:72%"></div>
+        <div class="spark-bar gold" style="height:74%"></div>
+      </div>
+    </div>
+    <div class="stat-card blue">
+      <div class="card-label">// BATTERY</div>
+      <div class="card-val blue" id="bat-v">--%</div>
+      <div class="bar-track"><div class="bar-fill blue" id="bat-b" style="width:0%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="card-label">// NETWORK</div>
+      <div class="card-val" id="net-v" style="font-size:0.7rem">SECURE</div>
+      <div class="sparkline" id="net-spark">
+        <div class="spark-bar" style="height:30%"></div>
+        <div class="spark-bar" style="height:70%"></div>
+        <div class="spark-bar" style="height:40%"></div>
+        <div class="spark-bar" style="height:90%"></div>
+        <div class="spark-bar" style="height:20%"></div>
+        <div class="spark-bar" style="height:60%"></div>
+        <div class="spark-bar" style="height:50%"></div>
+        <div class="spark-bar" style="height:80%"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end layout -->
+
 <script>
-  var logEntries = [];
-  var startTime = Date.now();
+// ── TICK MARKS ──
+var ticksEl = document.getElementById('ticks');
+for (var i = 0; i < 48; i++) {
+  var t = document.createElement('div');
+  t.className = 'tick';
+  t.style.transform = 'rotate(' + (i * 7.5) + 'deg)';
+  t.style.height = (i % 4 === 0) ? '14px' : '7px';
+  t.style.opacity = (i % 4 === 0) ? '0.8' : '0.3';
+  ticksEl.appendChild(t);
+}
 
-  function updateStats(cpu, ram, disk, bat) {
-    document.getElementById('cpu-v').textContent  = cpu  + '%';
-    document.getElementById('ram-v').textContent  = ram  + '%';
-    document.getElementById('disk-v').textContent = disk + '%';
-    document.getElementById('bat-v').textContent  = bat  + '%';
-    document.getElementById('cpu-b').style.width  = cpu  + '%';
-    document.getElementById('ram-b').style.width  = ram  + '%';
-    document.getElementById('disk-b').style.width = disk + '%';
-    document.getElementById('bat-b').style.width  = (isNaN(bat) ? 0 : bat) + '%';
-  }
+// ── CLOCK ──
+var startTime = Date.now();
+function updateClock() {
+  var now = new Date();
+  document.getElementById('clock').textContent = now.toTimeString().slice(0,8);
+  document.getElementById('datestr').textContent =
+    now.getDate().toString().padStart(2,'0') + ' ' +
+    ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][now.getMonth()] +
+    ' ' + now.getFullYear();
+  document.getElementById('daystr').textContent =
+    ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][now.getDay()];
 
-  function setStatus(text) {
-    document.getElementById('status-line').textContent = text;
-  }
+  var elapsed = Math.floor((Date.now()-startTime)/1000);
+  var h = String(Math.floor(elapsed/3600)).padStart(2,'0');
+  var m = String(Math.floor((elapsed%3600)/60)).padStart(2,'0');
+  var s = String(elapsed%60).padStart(2,'0');
+  document.getElementById('uptime-label').textContent = 'UPTIME · ' + h + ':' + m + ':' + s;
+}
+setInterval(updateClock, 1000);
+updateClock();
 
-  function setListening(active) {
-    document.getElementById('listen-pulse').style.display = active ? 'flex' : 'none';
+// ── SPARKLINE UPDATE ──
+var cpuHist=[], ramHist=[], netHist=[];
+function pushHistory(arr, val) {
+  arr.push(val);
+  if (arr.length > 8) arr.shift();
+}
+function updateSparkline(id, arr, cls) {
+  var bars = document.querySelectorAll('#' + id + ' .spark-bar');
+  var max = Math.max.apply(null, arr) || 1;
+  for (var i = 0; i < bars.length; i++) {
+    bars[i].style.height = ((arr[i] || 0) / max * 90 + 5) + '%';
   }
+}
 
-  function addLog(entry) {
-    logEntries.push(entry);
-    if (logEntries.length > 5) logEntries.shift();
-    var html = '';
-    for (var i = 0; i < logEntries.length; i++) {
-      var cls = (i === logEntries.length - 1) ? 'active' : '';
-      html += '<div class="log-entry ' + cls + '">> ' + logEntries[i] + '</div>';
-    }
-    document.getElementById('log-list').innerHTML = html;
-  }
+// ── NET SPARKLINE RANDOM ──
+setInterval(function() {
+  pushHistory(netHist, Math.random() * 100);
+  updateSparkline('net-spark', netHist, '');
+}, 800);
 
-  function tick() {
-    var now = new Date();
-    document.getElementById('clock').textContent = now.toTimeString().slice(0,8);
-    document.getElementById('datestr').textContent = now.toDateString().toUpperCase();
-    var e = Math.floor((Date.now()-startTime)/1000);
-    var h=String(Math.floor(e/3600)).padStart(2,'0');
-    var m=String(Math.floor((e%3600)/60)).padStart(2,'0');
-    var s=String(e%60).padStart(2,'0');
-    document.getElementById('uptime').textContent = 'UPTIME: '+h+':'+m+':'+s;
-  }
-  setInterval(tick, 1000); tick();
+// ── STATS (called from Python) ──
+function updateStats(cpu, ram, disk, bat, procs) {
+  document.getElementById('cpu-v').textContent  = cpu  + '%';
+  document.getElementById('ram-v').textContent  = ram  + '%';
+  document.getElementById('disk-v').textContent = disk + '%';
+  document.getElementById('bat-v').textContent  = bat  + '%';
+  document.getElementById('proc-v').textContent = procs;
 
-  var bootMsgs = ['LOADING MODULES...','VOICE ENGINE ONLINE','SCANNING HARDWARE...','ALL SYSTEMS GO','SAY: JARVIS'];
-  var bi = 0;
-  function boot() {
-    if (bi < bootMsgs.length) {
-      setStatus(bootMsgs[bi]); addLog(bootMsgs[bi]); bi++;
-      setTimeout(boot, 700);
-    }
+  document.getElementById('cpu-b').style.width  = cpu  + '%';
+  document.getElementById('ram-b').style.width  = ram  + '%';
+  document.getElementById('disk-b').style.width = disk + '%';
+  document.getElementById('bat-b').style.width  = (isNaN(bat)?0:bat) + '%';
+  document.getElementById('proc-b').style.width = Math.min(procs/5,100) + '%';
+
+  pushHistory(cpuHist, cpu);
+  pushHistory(ramHist, ram);
+  updateSparkline('cpu-spark', cpuHist, '');
+  updateSparkline('ram-spark', ramHist, 'red');
+
+  // High CPU alert
+  var alert = document.getElementById('alert-border');
+  var lbl   = document.getElementById('sys-label');
+  if (cpu > 85) {
+    alert.style.display = 'block';
+    lbl.textContent = '⚠ HIGH CPU DETECTED';
+    lbl.style.color = '#ff2a2a';
+  } else {
+    alert.style.display = 'none';
+    lbl.textContent = 'ALL SYSTEMS NOMINAL';
+    lbl.style.color = '';
   }
-  setTimeout(boot, 500);
+}
+
+// ── STATUS LINE ──
+function setStatus(text) {
+  var el = document.getElementById('status-line');
+  el.textContent = text;
+  el.className = '';
+  var t = text.toLowerCase();
+  if (t.includes('listen'))     el.className = 'listening';
+  else if (t.includes('recog')) el.className = 'recognizing';
+  else if (t.includes('sir') || t.includes('opening') || t.includes('jarvis is')) el.className = 'speaking';
+}
+
+// ── LISTEN INDICATOR ──
+function setListening(active) {
+  var badge = document.getElementById('listen-badge');
+  var ring  = document.getElementById('listen-ring');
+  if (active) {
+    badge.classList.add('show');
+    ring.classList.add('active');
+  } else {
+    badge.classList.remove('show');
+    ring.classList.remove('active');
+  }
+}
+
+// ── COMMAND LOG ──
+var logs = [];
+function addLog(entry) {
+  logs.push(entry);
+  if (logs.length > 5) logs.shift();
+  var html = '';
+  for (var i = 0; i < logs.length; i++) {
+    var cls = (i === logs.length-1) ? 'active' : '';
+    html += '<div class="log-entry ' + cls + '">&rsaquo; ' + logs[i] + '</div>';
+  }
+  document.getElementById('log-list').innerHTML = html;
+}
+
+// ── BOOT SEQUENCE ──
+var bootMsgs = [
+  'LOADING NEURAL CORE...',
+  'VOICE ENGINE ONLINE',
+  'BIOMETRICS VERIFIED',
+  'SCANNING HARDWARE...',
+  'ALL SYSTEMS GO',
+  'TELL ME SIR'
+];
+var bi = 0;
+function boot() {
+  if (bi < bootMsgs.length) {
+    setStatus(bootMsgs[bi]);
+    addLog(bootMsgs[bi]);
+    bi++;
+    setTimeout(boot, 600);
+  }
+}
+setTimeout(boot, 400);
 </script>
 </body>
 </html>
 """
 
+
 def _stats_loop(win):
     while True:
         try:
-            cpu  = psutil.cpu_percent(interval=None)
-            ram  = psutil.virtual_memory().percent
-            disk = psutil.disk_usage("C:\\").percent
-            bat  = psutil.sensors_battery()
-            b    = int(bat.percent) if bat else 0
-            win.evaluate_js(f"updateStats({cpu},{ram},{disk},{b})")
+            cpu   = psutil.cpu_percent(interval=None)
+            ram   = psutil.virtual_memory().percent
+            disk  = psutil.disk_usage("C:\\").percent
+            bat   = psutil.sensors_battery()
+            b     = int(bat.percent) if bat else 0
+            procs = len(psutil.pids())
+            win.evaluate_js(f"updateStats({cpu},{ram},{disk},{b},{procs})")
         except:
             pass
         time.sleep(1)
@@ -386,7 +942,7 @@ def _stats_loop(win):
 
 def set_status(win, text):
     try:
-        safe = text.replace("'","").replace('"','')[:50]
+        safe = text.replace("'", "").replace('"', '')[:50]
         win.evaluate_js(f"setStatus('{safe}')")
     except:
         pass
@@ -401,21 +957,20 @@ def set_listening(win, active):
 
 def add_log(win, text):
     try:
-        safe = text.replace("'","").replace('"','')[:40]
+        safe = text.replace("'", "").replace('"', '')[:40]
         win.evaluate_js(f"addLog('{safe}')")
     except:
         pass
 
 
 def iron_gui():
-    """Call this ONCE from main thread — it blocks until window is closed."""
     global _window
     _window = webview.create_window(
-        "JARVIS — Stark Industries",
+        "J.A.R.V.I.S — Stark Industries",
         html=HTML,
-        width=900,
+        width=1000,
         height=700,
         resizable=True,
     )
     threading.Thread(target=_stats_loop, args=(_window,), daemon=True).start()
-    webview.start(gui="edgechromium")   # blocks here — returns only when window closed
+    webview.start(gui="edgechromium")
