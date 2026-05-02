@@ -151,6 +151,7 @@ import psutil
 from airdrawing import start_drawing
 
 
+
 # GUI import
 try:
     import iron_gui as GUI
@@ -298,11 +299,7 @@ def jarvis_loop():
         elif "air drawing" in cmd or "start drawing" in cmd:
             speak("Starting air drawing sir.")
             gui_status("AIR DRAWING ACTIVE")
-            try:
-                from airdrawing import start_drawing
-                start_drawing()
-            except:
-                speak("Air drawing module not found sir.")
+            start_drawing()
             gui_status("LISTENING...")
 
         # ── BROWSERS ──
