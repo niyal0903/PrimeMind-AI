@@ -299,7 +299,13 @@ def jarvis_loop():
         elif "air drawing" in cmd or "start drawing" in cmd:
             speak("Starting air drawing sir.")
             gui_status("AIR DRAWING ACTIVE")
-            start_drawing()
+    
+            import threading
+            t = threading.Thread(target=start_drawing, daemon=True)
+            t.start()
+            # Canvas background mein chalega
+            # JARVIS sunna jaari rakhega
+    
             gui_status("LISTENING...")
 
         # ── BROWSERS ──
