@@ -448,5 +448,3 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("Jarvis offline.")
 #updaye code
-#new update...
-#updtae
