@@ -447,5 +447,4 @@ if __name__ == "__main__":
                 time.sleep(1)
         except KeyboardInterrupt:
             print("Jarvis offline.")
-#updaye code
-#new update....
+#updaye code..
