@@ -974,3 +974,4 @@ def iron_gui():
     )
     threading.Thread(target=_stats_loop, args=(_window,), daemon=True).start()
     webview.start(gui="edgechromium")
+#updtaeS
